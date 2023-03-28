@@ -49,6 +49,29 @@ class Kalman_Filter:
 
         return self.angle
     
+    def set_angle(self, angle):
+        self.angle = angle
+
+    def get_rate(self):
+        return self.rate
+
+    def set_Q_angle(self, Q_angle):
+        self.Q_angle = Q_angle
+
+    def set_Q_gy_bias(self, Q_gy_bias):
+        self.Q_gy_bias = Q_gy_bias
+
+    def set_R_angle(self, R_angle):
+        self.R_angle = R_angle
+
+    def get_Q_angle(self):
+        return self.Q_angle
+
+    def get_Q_gy_bias(self):
+        return self.Q_gy_bias
+
+    def get_R_angle(self):
+        return self.R_angle
 
 
 
