@@ -8,7 +8,6 @@ import time
 from Kalman_Filter import KalmanFilter
 from Calibration_IMU import CalibrationIMU
 
-
 kfr = KalmanFilter()  # initialize Kalman Filter
 kfp = KalmanFilter()
 sensor = mpu6050(0x68)
@@ -18,14 +17,14 @@ pca.frequency = 50  # Set the PWM frequency to 50hz
 motor1 = adafruit_motor.servo.ContinuousServo(pca.channels[0])  # Set the servo to channel 0
 motor2 = adafruit_motor.servo.ContinuousServo(pca.channels[2])  # Set the servo to channel 1
 motor3 = adafruit_motor.servo.ContinuousServo(pca.channels[4])  # Set the servo to channel 2
-kp = 0.1
+kp = 0.15
 ki = 0.01
-kd = 0.001
+kd = 0.01
 pasterror = 0.0
 error = 0.0
 max_pid = 1
 min_pid = -1
-tau = 0.0
+tau = 3
 sample_t = 0.0
 proportional = 0.0
 integral = 0.0
@@ -54,7 +53,6 @@ def pid(measurement, dt, setpoint=0):
 
     error = setpoint - measurement  # set-point always 0 on both roll and pitch
     sample_t = dt
-    tau = sample_t * 0.5
     # PID difference equations
     proportional = kp * error  # proportional
 
@@ -91,7 +89,7 @@ def pid(measurement, dt, setpoint=0):
 
     pasterror = error
     prevmeasurement = measurement
-    result = abs(pid_output)/78
+    result = abs(pid_output) / 78
 
     return result
 
@@ -156,7 +154,7 @@ def get_pitch():
         accel_z = accel_data['z'] - acc_z_off
         pitch = -1 * np.arctan2(-accel_x, np.sqrt(accel_y ** 2 + accel_z ** 2)) * (180 / np.pi)
         dt = time.time() - prev_time
-        p = kfp.get_angle(pitch, gyro_y, dt) - 2.5
+        p = kfp.get_angle(pitch, gyro_y, dt)
         pitch += p
     pitch = pitch / 5
     return pitch
@@ -168,13 +166,10 @@ def main():
     # boolean variables for platform balance
     balance_roll = True
     balance_pitch = True
-    a = False
-    b = False
     # position of the servos
-    pos1 = np.array([0, 127, 127 * np.sin(roll * np.pi / 180)])
-    pos2 = np.array([110, -63.5, 110 * np.sin(pitch * np.pi / 180)])
-    pos3 = np.array([-110, -63.5, 110 * np.sin(pitch * np.pi / 180)])
-    motor_constant = 1
+    pos1 = np.array([0, 127, 127 * np.tan(roll * np.pi / 180)])
+    pos2 = np.array([110, -63.5, 110 * np.tan(pitch * np.pi / 180)])
+    pos3 = np.array([-110, -63.5, 110 * np.tan(pitch * np.pi / 180)])
     end_time = time.time() + 5
     while end_time > time.time():
         get_roll()
@@ -197,177 +192,124 @@ def main():
                 motor3.throttle = 0
 
             if not balance_roll:
-                temp_x = roll
                 while not balance_roll:
                     print("adjusting roll")
                     start_time = time.time()
                     roll = int(get_roll())
                     if roll > 0.0:
-                        print("roll is positive")
-                        if pos1[2] == 0 and pos2[2] == 0 and pos3[2] == 0:
-                            a = True
-                            motor_constant = 1
-                            dt = time.time() - start_time
-                            motor1.throttle = motor_constant * pid(roll, dt)
-                            motor2.throttle = 0
-                            motor3.throttle = 0
-                            print("motor1 is on (CCW)")
-                        elif pos2[2] >= (127 * np.sin(roll * np.pi / 180)) and pos3[2] >= (
-                                127 * np.sin(roll * np.pi / 180)):
-                            b = True
-                            motor_constant *= -1
+                        print("roll is positive", roll)
+                        if pos2[2] >= abs((127 * np.tan(roll * np.pi / 180))) and pos3[2] >= abs((
+                                127 * np.tan(roll * np.pi / 180))):
+                            motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = motor_constant * pid(roll, dt)
                             motor3.throttle = motor_constant * pid(roll, dt)
+                            diff_roll = get_roll() - roll
+                            pos2[2] -= 127 * abs(np.tan(diff_roll * np.pi / 180))
+                            pos3[2] -= 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor2 and motor3 are on (CW)")
+                            print("pos2:", pos2[2], " pos3:", pos3[2])
                         else:
-                            a = True
                             motor_constant = 1
                             dt = time.time() - start_time
                             motor1.throttle = motor_constant * pid(roll, dt)
                             motor2.throttle = 0
                             motor3.throttle = 0
+                            diff_roll = get_roll() - roll
+                            pos1[2] += 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor1 is on (CCW)")
+                            print("pos1:", pos1[2])
                     elif roll < 0.0:
-                        print("roll is negative")
-                        temp_x = roll
-                        if pos2[2] == 0 and pos3[2] == 0 and pos1[2] == 0:
-                            a = True
-                            motor_constant = 1
-                            dt = time.time() - start_time
-                            pid_r = pid(roll, dt)
-                            motor1.throttle = 0
-                            motor2.throttle = motor_constant * pid_r
-                            motor3.throttle = motor_constant * pid_r
-                            print("motor2 and motor3 are on (CCW)")
-                        elif pos1[2] >= (127 * np.sin(roll * np.pi / 180)):
-                            b = True
-                            motor_constant *= -1
+                        print("roll is negative", roll)
+                        if pos1[2] >= abs((127 * np.tan(roll * np.pi / 180))):
+                            motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = motor_constant * pid(roll, dt)
                             motor2.throttle = 0
                             motor3.throttle = 0
+                            diff_roll = get_roll() - roll
+                            pos1[2] -= 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor1 is on (CW)")
+                            print("pos1:", pos1[2])
                         else:
-                            a = True
                             motor_constant = 1
                             dt = time.time() - start_time
                             pid_r = pid(roll, dt)
                             motor1.throttle = 0
                             motor2.throttle = motor_constant * pid_r
                             motor3.throttle = motor_constant * pid_r
+                            diff_roll = get_roll() - roll
+                            pos2[2] += 127 * abs(np.tan(diff_roll * np.pi / 180))
+                            pos3[2] += 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor2 and motor3 are on (CCW)")
+                            print("pos2:", pos2[2], " pos3:", pos3[2])
 
                     if roll == 0.0:
                         print("roll adjusted")
+                        print("pos1, ", pos1[2], " pos2, ", pos2[2], " pos3, ", pos3[2])
                         motor1.throttle = 0
                         motor2.throttle = 0
                         motor3.throttle = 0
-                        motor_constant = 1
                         balance_roll = True
-                        if temp_x > 0.0:
-                            if a:
-                                pos1[2] += 127 * np.sin(temp_x * np.pi / 180)
-                                a = False
-                                print("pos1 adjusted")
-                            elif b:
-                                pos2[2] -= 127 * np.sin(temp_x * np.pi / 180)
-                                pos3[2] -= 127 * np.sin(temp_x * np.pi / 180)
-                                b = False
-                                print("pos2 and pos3 adjusted")
-                        elif temp_x < 0.0:
-                            if a:
-                                pos2[2] += -1 * 127 * np.sin(temp_x * np.pi / 180)
-                                pos3[2] += -1 * 127 * np.sin(temp_x * np.pi / 180)
-                                a = False
-                                print("pos2 and pos3 adjusted")
-                            elif b:
-                                pos1 += 127 * np.sin(temp_x * np.pi / 180)
-                                b = False
-                                print("pos1 adjusted")
 
             if not balance_pitch:
-                start_time = time.time()
-                temp_y = pitch
                 while not balance_pitch:
-                    print("adjusting pitch")
+                    print("adjusting pitch", pitch)
+                    start_time = time.time()
                     pitch = int(get_pitch())
                     if pitch > 0.0:
                         print("pitch is positive")
-                        if pos3[2] == 0 and pos2[2] == 0:
-                            a = True
-                            dt = time.time() - start_time
-                            motor1.throttle = 0
-                            motor2.throttle = 0
-                            motor3.throttle = motor_constant * pid(pitch, dt)
-                            print("motor3 is on (CCW)")
-                        elif pos2[2] >= (110 * np.sin(pitch * np.pi / 180)):
-                            b = True
-                            motor_constant *= -1
+                        if pos2[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
+                            motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = motor_constant * pid(pitch, dt)
                             motor3.throttle = 0
+                            diff_pitch = get_pitch() - pitch
+                            pos2[2] -= 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor2 is on (CW)")
+                            print("pos2:", pos2[2])
                         else:
-                            a = True
+                            motor_constant = 1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = 0
                             motor3.throttle = motor_constant * pid(pitch, dt)
+                            diff_pitch = get_pitch() - pitch
+                            pos3[2] += 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor3 is on (CCW)")
+                            print("pos3:", pos3[2])
                     elif pitch < 0.0:
-                        print("pitch is negative")
-                        temp_y = pitch
-                        if pos2[2] == 0 and pos3[2] == 0:
-                            a = True
-                            dt = time.time() - start_time
-                            motor1.throttle = 0
-                            motor2.throttle = motor_constant * pid(pitch, dt)
-                            motor3.throttle = 0
-                            print("motor2 is on (CCW)")
-                        elif pos3[2] >= (110 * np.sin(pitch * np.pi / 180)):
-                            b = True
-                            motor_constant *= -1
+                        print("pitch is negative", pitch)
+                        if pos3[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
+                            motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = 0
                             motor3.throttle = motor_constant * pid(pitch, dt)
+                            diff_pitch = get_pitch() - pitch
+                            pos3[2] -= 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor3 is on (CW)")
+                            print("pos3:", pos3[2])
                         else:
-                            a = True
+                            motor_constant = 1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = motor_constant * pid(pitch, dt)
                             motor3.throttle = 0
+                            diff_pitch = get_pitch() - pitch
+                            pos2[2] += 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor2 is on (CCW)")
+                            print("pos2:", pos2[2])
 
                     if pitch == 0.0:
                         print("pitch adjusted")
+                        print("pos1:", pos1[2], " pos2:", pos2[2], " pos3:", pos3[2])
                         motor1.throttle = 0
                         motor2.throttle = 0
                         motor3.throttle = 0
-                        motor_constant = 1
                         balance_pitch = True
-                        if temp_y > 0.0:
-                            if a:
-                                pos3[2] += 110 * np.sin(temp_y * np.pi / 180)
-                                a = False
-                                print("pos3 adjusted")
-                            elif b:
-                                pos2[2] -= 110 * np.sin(temp_y * np.pi / 180)
-                                b = False
-                                print("pos2 adjusted")
-                        elif temp_y < 0.0:
-                            if a:
-                                pos2[2] += -1 * 110 * np.sin(temp_y * np.pi / 180)
-                                a = False
-                                print("pos2 adjusted")
-                            elif b:
-                                pos3[2] += 110 * np.sin(temp_y * np.pi / 180)
-                                b = False
-                                print("pos3 adjusted")
 
     except KeyboardInterrupt:
         print("Exiting")
