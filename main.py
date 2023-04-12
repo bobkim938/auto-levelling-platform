@@ -29,18 +29,19 @@ sample_t = 0.0
 proportional = 0.0
 integral = 0.0
 derivative = 0.0
-prevmeasurement = 0.0
+prevmeasurement_roll = 0.0
+prevmeasurement_pitch = 0.0
 pid_output = 0.0
 max_rp = 5
 min_rp = -5
 
 
-def pid(measurement, dt, setpoint=0):
+def pid_roll(measurement, dt, setpoint=0):
     global kp, ki, kd
     global error, pasterror
     global max_pid, min_pid  # for integrator anti-windup
     global tau, sample_t
-    global proportional, integral, derivative, prevmeasurement
+    global proportional, integral, derivative, prevmeasurement_roll
     global pid_output
 
     # Roll and pitch limits of the system
@@ -73,7 +74,7 @@ def pid(measurement, dt, setpoint=0):
     elif integral < min_pid:
         integral = min_pid
 
-    derivative = ((2 * kd) / (sample_t + 2 * tau)) * (measurement - prevmeasurement) - (
+    derivative = ((2 * kd) / (sample_t + 2 * tau)) * (measurement - prevmeasurement_roll) - (
             (sample_t - 2 * tau) / (sample_t + 2 * tau)) * derivative  # derivative
 
     pid_output = proportional + integral + derivative
@@ -88,7 +89,66 @@ def pid(measurement, dt, setpoint=0):
         pid_output = min_rot_speed
 
     pasterror = error
-    prevmeasurement = measurement
+    prevmeasurement_roll = measurement
+    result = abs(pid_output) / 78
+
+    return result
+
+
+def pid_pitch(measurement, dt, setpoint=0):
+    global kp, ki, kd
+    global error, pasterror
+    global max_pid, min_pid  # for integrator anti-windup
+    global tau, sample_t
+    global proportional, integral, derivative, prevmeasurement_pitch
+    global pid_output
+
+    # Roll and pitch limits of the system
+    if measurement > max_rp:
+        measurement = max_rp
+    elif measurement < min_rp:
+        measurement = min_rp
+    else:
+        measurement = measurement
+
+    error = setpoint - measurement  # set-point always 0 on both roll and pitch
+    sample_t = dt
+    # PID difference equations
+    proportional = kp * error  # proportional
+
+    # Calculate scaling factor based on desired output range and servo characteristics
+    max_rot_speed = 78  # Maximum rotational speed of the FS5106R servo in RPM
+    min_rot_speed = -78  # Minimum rotational speed of the FS5106R servo in RPM
+    scaling_factor = (max_rot_speed - min_rot_speed) / (max_pid - min_pid)
+
+    # Calculate output limits for anti-windup
+    max_pid = max_rot_speed / scaling_factor
+    min_pid = min_rot_speed / scaling_factor
+
+    integral += float(((ki * sample_t) / 2) * (error + pasterror))  # integral
+
+    # integral term anti-windup
+    if integral > max_pid:
+        integral = max_pid
+    elif integral < min_pid:
+        integral = min_pid
+
+    derivative = ((2 * kd) / (sample_t + 2 * tau)) * (measurement - prevmeasurement_pitch) - (
+            (sample_t - 2 * tau) / (sample_t + 2 * tau)) * derivative  # derivative
+
+    pid_output = proportional + integral + derivative
+
+    # Scale PID output to servo rotational speed range
+    pid_output = pid_output * scaling_factor
+
+    # Output limits for anti-windup
+    if pid_output > max_rot_speed:
+        pid_output = max_rot_speed
+    elif pid_output < min_rot_speed:
+        pid_output = min_rot_speed
+
+    pasterror = error
+    prevmeasurement_pitch = measurement
     result = abs(pid_output) / 78
 
     return result
@@ -177,13 +237,13 @@ def main():
 
     try:
         while True:
-            roll = int(get_roll())
-            pitch = int(get_pitch())
+            roll = get_roll()
+            pitch = get_pitch()
 
-            if roll > 0 or roll < 0:
+            if roll > 0.5 or roll < -0.5:
                 balance_roll = False
 
-            if pitch > 0 or pitch < 0:
+            if pitch > 0.5 or pitch < -0.5:
                 balance_pitch = False
 
             if balance_roll and balance_pitch:
@@ -195,7 +255,20 @@ def main():
                 while not balance_roll:
                     print("adjusting roll")
                     start_time = time.time()
-                    roll = int(get_roll())
+                    roll = get_roll()
+                    if not balance_roll:
+                        while not balance_roll:
+                            print("adjusting roll")
+                            start_time = time.time()
+                            roll = get_roll()
+                            if roll < 0.5 or roll > -0.5:
+                                np.floor(roll)
+                            elif 0.5 < roll < 1.0:
+                                np.ceil(roll)
+                            elif -0.5 > roll > -1.0:
+                                np.floor(roll)
+                            else:
+                                np.floor(roll)
                     if roll > 0.0:
                         print("roll is positive", roll)
                         if pos2[2] >= abs((127 * np.tan(roll * np.pi / 180))) and pos3[2] >= abs((
@@ -203,8 +276,8 @@ def main():
                             motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
-                            motor2.throttle = motor_constant * pid(roll, dt)
-                            motor3.throttle = motor_constant * pid(roll, dt)
+                            motor2.throttle = motor_constant * pid_roll(roll, dt)
+                            motor3.throttle = motor_constant * pid_roll(roll, dt)
                             diff_roll = get_roll() - roll
                             pos2[2] -= 127 * abs(np.tan(diff_roll * np.pi / 180))
                             pos3[2] -= 127 * abs(np.tan(diff_roll * np.pi / 180))
@@ -213,19 +286,19 @@ def main():
                         else:
                             motor_constant = 1
                             dt = time.time() - start_time
-                            motor1.throttle = motor_constant * pid(roll, dt)
+                            motor1.throttle = motor_constant * pid_roll(roll, dt)
                             motor2.throttle = 0
                             motor3.throttle = 0
                             diff_roll = get_roll() - roll
                             pos1[2] += 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor1 is on (CCW)")
                             print("pos1:", pos1[2])
-                    elif roll < 0.0:
+                    if roll < 0.0:
                         print("roll is negative", roll)
                         if pos1[2] >= abs((127 * np.tan(roll * np.pi / 180))):
                             motor_constant = -1
                             dt = time.time() - start_time
-                            motor1.throttle = motor_constant * pid(roll, dt)
+                            motor1.throttle = motor_constant * pid_roll(roll, dt)
                             motor2.throttle = 0
                             motor3.throttle = 0
                             diff_roll = get_roll() - roll
@@ -235,7 +308,7 @@ def main():
                         else:
                             motor_constant = 1
                             dt = time.time() - start_time
-                            pid_r = pid(roll, dt)
+                            pid_r = pid_roll(roll, dt)
                             motor1.throttle = 0
                             motor2.throttle = motor_constant * pid_r
                             motor3.throttle = motor_constant * pid_r
@@ -257,14 +330,23 @@ def main():
                 while not balance_pitch:
                     print("adjusting pitch", pitch)
                     start_time = time.time()
-                    pitch = int(get_pitch())
+                    pitch = get_pitch()
+                    if pitch < 0.5 or pitch > -0.5:
+                        np.floor(pitch)
+                    elif 0.5 < pitch < 1.0:
+                        np.ceil(pitch)
+                    elif -0.5 > pitch > -1.0:
+                        np.floor(pitch)
+                    else:
+                        np.floor(pitch)
+
                     if pitch > 0.0:
                         print("pitch is positive")
                         if pos2[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
                             motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
-                            motor2.throttle = motor_constant * pid(pitch, dt)
+                            motor2.throttle = motor_constant * pid_pitch(pitch, dt)
                             motor3.throttle = 0
                             diff_pitch = get_pitch() - pitch
                             pos2[2] -= 110 * abs(np.tan(diff_pitch * np.pi / 180))
@@ -275,19 +357,19 @@ def main():
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = 0
-                            motor3.throttle = motor_constant * pid(pitch, dt)
+                            motor3.throttle = motor_constant * pid_pitch(pitch, dt)
                             diff_pitch = get_pitch() - pitch
                             pos3[2] += 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor3 is on (CCW)")
                             print("pos3:", pos3[2])
-                    elif pitch < 0.0:
+                    if pitch < 0.0:
                         print("pitch is negative", pitch)
                         if pos3[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
                             motor_constant = -1
                             dt = time.time() - start_time
                             motor1.throttle = 0
                             motor2.throttle = 0
-                            motor3.throttle = motor_constant * pid(pitch, dt)
+                            motor3.throttle = motor_constant * pid_pitch(pitch, dt)
                             diff_pitch = get_pitch() - pitch
                             pos3[2] -= 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor3 is on (CW)")
@@ -296,7 +378,7 @@ def main():
                             motor_constant = 1
                             dt = time.time() - start_time
                             motor1.throttle = 0
-                            motor2.throttle = motor_constant * pid(pitch, dt)
+                            motor2.throttle = motor_constant * pid_pitch(pitch, dt)
                             motor3.throttle = 0
                             diff_pitch = get_pitch() - pitch
                             pos2[2] += 110 * abs(np.tan(diff_pitch * np.pi / 180))
