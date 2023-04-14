@@ -34,6 +34,10 @@ prevmeasurement_pitch = 0.0
 pid_output = 0.0
 max_rp = 5
 min_rp = -5
+z_off = []
+x_off = []
+y_off = []
+gyro_off = []
 
 
 def pid_roll(measurement, dt, setpoint=0):
@@ -184,10 +188,10 @@ def get_roll():
         prev_time = time.time()
         gyro_data = sensor.get_gyro_data()
         accel_data = sensor.get_accel_data()
-        gyro_x = gyro_data['x'] - (-1.4764528604678508)
-        acc_x_off = accel_data['x'] * (-0.49996226952053047) + 0.06969925934469653
-        acc_y_off = accel_data['y'] * (-0.499933868982771) + (-0.06087691361286952)
-        acc_z_off = accel_data['z'] * (-0.4933871810249762) + 1.7733706385934813
+        gyro_x = gyro_data['x'] - gyro_off[0]
+        acc_x_off = accel_data['x'] * x_off[0] + x_off[1]
+        acc_y_off = accel_data['y'] * y_off[0] + y_off[1]
+        acc_z_off = accel_data['z'] * z_off[0] + z_off[1]
         accel_x = accel_data['x'] - acc_x_off
         accel_y = accel_data['y'] - acc_y_off
         accel_z = accel_data['z'] - acc_z_off
@@ -204,11 +208,11 @@ def get_pitch():
     for i in range(5):
         prev_time = time.time()
         gyro_data = sensor.get_gyro_data()
-        gyro_y = gyro_data['y'] - 0.804882200137513
+        gyro_y = gyro_data['y'] - gyro_off[1]
         accel_data = sensor.get_accel_data()
-        acc_x_off = accel_data['x'] * (-0.49996226952053047) + 0.06969925934469653
-        acc_y_off = accel_data['y'] * (-0.499933868982771) + (-0.06087691361286952)
-        acc_z_off = accel_data['z'] * (-0.4933871810249762) + 1.7733706385934813
+        acc_x_off = accel_data['x'] * x_off[0] + x_off[1]
+        acc_y_off = accel_data['y'] * y_off[0] + y_off[1]
+        acc_z_off = accel_data['z'] * z_off[0] + z_off[1]
         accel_x = accel_data['x'] - acc_x_off
         accel_y = accel_data['y'] - acc_y_off
         accel_z = accel_data['z'] - acc_z_off
@@ -221,8 +225,17 @@ def get_pitch():
 
 
 def main():
+    global z_off
+    global x_off
+    global y_off
+    global gyro_off
+    gyro_off = calibration_gyro()
+    z_off = calibration_az()
+    x_off = calibration_ax()
+    y_off = calibration_ay()
     roll = 0.0
     pitch = 0.0
+
     # boolean variables for platform balance
     balance_roll = True
     balance_pitch = True
