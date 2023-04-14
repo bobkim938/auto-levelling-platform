@@ -17,9 +17,9 @@ pca.frequency = 50  # Set the PWM frequency to 50hz
 motor1 = adafruit_motor.servo.ContinuousServo(pca.channels[0])  # Set the servo to channel 0
 motor2 = adafruit_motor.servo.ContinuousServo(pca.channels[2])  # Set the servo to channel 1
 motor3 = adafruit_motor.servo.ContinuousServo(pca.channels[4])  # Set the servo to channel 2
-kp = 0.15
-ki = 0.01
-kd = 0.01
+kp = 0.2
+ki = 0.02
+kd = 0.001
 pasterror = 0.0
 error = 0.0
 max_pid = 1
@@ -237,13 +237,13 @@ def main():
 
     try:
         while True:
-            roll = get_roll()
-            pitch = get_pitch()
+            roll = int(get_roll())
+            pitch = int(get_pitch())
 
-            if roll > 0.5 or roll < -0.5:
+            if roll > 0 or roll < 0:
                 balance_roll = False
 
-            if pitch > 0.5 or pitch < -0.5:
+            if pitch > 0 or pitch < 0:
                 balance_pitch = False
 
             if balance_roll and balance_pitch:
@@ -255,20 +255,8 @@ def main():
                 while not balance_roll:
                     print("adjusting roll")
                     start_time = time.time()
-                    roll = get_roll()
-                    if not balance_roll:
-                        while not balance_roll:
-                            print("adjusting roll")
-                            start_time = time.time()
-                            roll = get_roll()
-                            if roll < 0.5 or roll > -0.5:
-                                np.floor(roll)
-                            elif 0.5 < roll < 1.0:
-                                np.ceil(roll)
-                            elif -0.5 > roll > -1.0:
-                                np.floor(roll)
-                            else:
-                                np.floor(roll)
+                    roll = int(get_roll())
+                    roll_time = time.time()
                     if roll > 0.0:
                         print("roll is positive", roll)
                         if pos2[2] >= abs((127 * np.tan(roll * np.pi / 180))) and pos3[2] >= abs((
@@ -293,7 +281,7 @@ def main():
                             pos1[2] += 127 * abs(np.tan(diff_roll * np.pi / 180))
                             print("motor1 is on (CCW)")
                             print("pos1:", pos1[2])
-                    if roll < 0.0:
+                    elif roll < 0.0:
                         print("roll is negative", roll)
                         if pos1[2] >= abs((127 * np.tan(roll * np.pi / 180))):
                             motor_constant = -1
@@ -321,6 +309,8 @@ def main():
                     if roll == 0.0:
                         print("roll adjusted")
                         print("pos1, ", pos1[2], " pos2, ", pos2[2], " pos3, ", pos3[2])
+                        roll_end = time.time() - roll_time
+                        print("adjusted in:", roll_end, " seconds")
                         motor1.throttle = 0
                         motor2.throttle = 0
                         motor3.throttle = 0
@@ -330,16 +320,8 @@ def main():
                 while not balance_pitch:
                     print("adjusting pitch", pitch)
                     start_time = time.time()
-                    pitch = get_pitch()
-                    if pitch < 0.5 or pitch > -0.5:
-                        np.floor(pitch)
-                    elif 0.5 < pitch < 1.0:
-                        np.ceil(pitch)
-                    elif -0.5 > pitch > -1.0:
-                        np.floor(pitch)
-                    else:
-                        np.floor(pitch)
-
+                    pitch = int(get_pitch())
+                    pitch_time = time.time()
                     if pitch > 0.0:
                         print("pitch is positive")
                         if pos2[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
@@ -362,7 +344,7 @@ def main():
                             pos3[2] += 110 * abs(np.tan(diff_pitch * np.pi / 180))
                             print("motor3 is on (CCW)")
                             print("pos3:", pos3[2])
-                    if pitch < 0.0:
+                    elif pitch < 0.0:
                         print("pitch is negative", pitch)
                         if pos3[2] >= abs((110 * np.tan(pitch * np.pi / 180))):
                             motor_constant = -1
@@ -388,6 +370,8 @@ def main():
                     if pitch == 0.0:
                         print("pitch adjusted")
                         print("pos1:", pos1[2], " pos2:", pos2[2], " pos3:", pos3[2])
+                        pitch_end = time.time() - pitch_time
+                        print("adjusted in:", pitch_end, " seconds")
                         motor1.throttle = 0
                         motor2.throttle = 0
                         motor3.throttle = 0
