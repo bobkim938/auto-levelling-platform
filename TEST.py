@@ -34,10 +34,6 @@ prevmeasurement_pitch = 0.0
 pid_output = 0.0
 max_rp = 5
 min_rp = -5
-z_off = []
-x_off = []
-y_off = []
-gyro_off = []
 
 
 def pid_roll(measurement, dt, setpoint=0):
@@ -188,16 +184,16 @@ def get_roll():
         prev_time = time.time()
         gyro_data = sensor.get_gyro_data()
         accel_data = sensor.get_accel_data()
-        gyro_x = gyro_data['x'] - gyro_off[0]
-        acc_x_off = accel_data['x'] * x_off[0] + x_off[1]
-        acc_y_off = accel_data['y'] * y_off[0] + y_off[1]
-        acc_z_off = accel_data['z'] * z_off[0] + z_off[1]
+        gyro_x = gyro_data['x'] - (-1.4764528604678508)
+        acc_x_off = accel_data['x'] * (-0.49996226952053047) + 0.06969925934469653
+        acc_y_off = accel_data['y'] * (-0.499933868982771) + (-0.06087691361286952)
+        acc_z_off = accel_data['z'] * (-0.4933871810249762) + 1.7733706385934813
         accel_x = accel_data['x'] - acc_x_off
         accel_y = accel_data['y'] - acc_y_off
         accel_z = accel_data['z'] - acc_z_off
         roll = -1 * np.arctan2(accel_y, np.sqrt(accel_x ** 2 + accel_z ** 2)) * (180 / np.pi)
         dt = time.time() - prev_time
-        r = kfr.angle_estimate(roll, gyro_x, dt)
+        r = kfr.get_angle(roll, gyro_x, dt)
         roll += r
     roll = roll / 5
     return roll
@@ -208,35 +204,25 @@ def get_pitch():
     for i in range(5):
         prev_time = time.time()
         gyro_data = sensor.get_gyro_data()
-        gyro_y = gyro_data['y'] - gyro_off[1]
+        gyro_y = gyro_data['y'] - 0.804882200137513
         accel_data = sensor.get_accel_data()
-        acc_x_off = accel_data['x'] * x_off[0] + x_off[1]
-        acc_y_off = accel_data['y'] * y_off[0] + y_off[1]
-        acc_z_off = accel_data['z'] * z_off[0] + z_off[1]
+        acc_x_off = accel_data['x'] * (-0.49996226952053047) + 0.06969925934469653
+        acc_y_off = accel_data['y'] * (-0.499933868982771) + (-0.06087691361286952)
+        acc_z_off = accel_data['z'] * (-0.4933871810249762) + 1.7733706385934813
         accel_x = accel_data['x'] - acc_x_off
         accel_y = accel_data['y'] - acc_y_off
         accel_z = accel_data['z'] - acc_z_off
         pitch = -1 * np.arctan2(-accel_x, np.sqrt(accel_y ** 2 + accel_z ** 2)) * (180 / np.pi)
         dt = time.time() - prev_time
-        p = kfp.angle_estimate(pitch, gyro_y, dt)
+        p = kfp.get_angle(pitch, gyro_y, dt)
         pitch += p
     pitch = pitch / 5
     return pitch
 
 
 def main():
-    global z_off
-    global x_off
-    global y_off
-    global gyro_off
-    gyro_off = calibration_gyro()
-    z_off = calibration_az()
-    x_off = calibration_ax()
-    y_off = calibration_ay()
-    print("Calibration done")
     roll = 0.0
     pitch = 0.0
-
     # boolean variables for platform balance
     balance_roll = True
     balance_pitch = True

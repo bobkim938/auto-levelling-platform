@@ -6,7 +6,7 @@ from mpu6050 import mpu6050
 import numpy as np
 import time
 from Kalman_Filter import KalmanFilter
-from Calibration_IMU import CalibrationIMU
+from IMU_Calibration import CalibrationIMU
 
 kfr = KalmanFilter()  # initialize Kalman Filter
 kfp = KalmanFilter()
